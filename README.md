@@ -85,10 +85,29 @@ Open http://localhost:8000.
 4. **Open** any application to read, tweak (extra instructions), regenerate, or
    copy the letter, then track status (step 4) as you apply.
 
+## Cover letters are drafted only when required
+
+The app does **not** write a letter for every job. During auto-apply it checks
+whether the application requires a cover letter and only drafts one when it's
+**known to be required**:
+
+| Detected requirement | Behavior |
+| -------------------- | -------- |
+| `required`           | Draft the tailored letter automatically. |
+| `optional`           | Skip — draft on demand (the "Generate cover letter" button). |
+| `not_required`       | Skip — no letter needed. |
+| `unknown`            | Skip — draft on demand if a site turns out to need one. |
+
+Detection uses the official application form where available: Greenhouse's
+questions endpoint (`/jobs/{id}?questions=true`) reports whether a `cover_letter`
+field exists and is required. General web-search results (Remotive) expose no
+form schema, so they come back `unknown` and are left for on-demand drafting —
+keeping cost to zero unless you actually need a letter.
+
 ## How auto-submission works (and its limits)
 
-`POST /api/auto-apply` runs: search (free) → CV ranking (free) → draft letter
-(one model call per job) → submission.
+`POST /api/auto-apply` runs: search (free) → CV ranking (free) → cover-letter
+**requirement check** → draft only when required (model call) → submission.
 
 - **Submission is opt-in** (`submit: true`) and goes only through official board
   APIs. `app/connectors/submit.py` implements Greenhouse's documented Job Board

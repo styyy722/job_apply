@@ -64,6 +64,7 @@ class JobOut(BaseModel):
     url: str | None
     apply_url: str | None
     description: str
+    cover_letter_requirement: str | None
     analysis: dict[str, Any] | None
     created_at: datetime
 
@@ -148,7 +149,10 @@ class AutoApplyItem(BaseModel):
     relevance: float
     status: str
     apply_url: str | None
-    outcome: str  # drafted | submitted | dry_run | queued_manual | error
+    # required | optional | not_required | unknown
+    cover_letter_requirement: str
+    drafted: bool
+    outcome: str  # drafted | submitted | dry_run | queued | error
     detail: str | None = None
 
 

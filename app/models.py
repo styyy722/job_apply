@@ -53,6 +53,14 @@ class Job(Base):
     url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     apply_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     description: Mapped[str] = mapped_column(Text)
+    # Board/company token this job was imported with (needed to query the
+    # application form on official APIs).
+    board: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Whether a cover letter is required to apply, when we can determine it:
+    # "required" | "optional" | "not_required" | "unknown".
+    cover_letter_requirement: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
     # Model's analysis of the JD (requirements, keywords, tone, ...).
     analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

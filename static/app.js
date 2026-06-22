@@ -232,19 +232,27 @@ function renderAutoApply(res) {
   $("#aaStatus").textContent = `Query "${res.query}" — found ${res.found}, drafted ${res.considered}.`;
   const list = $("#aaResults");
   list.innerHTML = "";
+  const reqLabel = {
+    required: "cover letter required",
+    optional: "cover letter optional",
+    not_required: "no cover letter needed",
+    unknown: "requirement unknown",
+  };
   for (const it of res.items) {
     const li = document.createElement("li");
     const left = document.createElement("div");
+    const letter = it.drafted ? "letter drafted ✓" : "no letter drafted";
     left.innerHTML = `<strong>${esc(it.job_title)}</strong>
       <div class="meta">${esc(it.company || "")} · relevance ${(
         it.relevance * 100
-      ).toFixed(0)}% · <em>${esc(it.outcome)}</em>${
+      ).toFixed(0)}% · ${esc(reqLabel[it.cover_letter_requirement] || "")} ·
+      ${esc(letter)} · <em>${esc(it.outcome)}</em>${
       it.detail ? " — " + esc(it.detail) : ""
     }</div>`;
     const right = document.createElement("div");
     const btn = document.createElement("button");
     btn.className = "secondary";
-    btn.textContent = "Open letter";
+    btn.textContent = it.drafted ? "Open letter" : "Draft / open";
     btn.addEventListener("click", () => openDrawer(it.application_id));
     right.appendChild(btn);
     if (it.apply_url) {

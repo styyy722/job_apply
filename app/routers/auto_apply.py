@@ -89,44 +89,82 @@ def auto_apply(payload: AutoApplyRequest, db: Session = Depends(get_db)):
     applicant = db.get(Applicant, 1)
     items: list[AutoApplyItem] = []
 
-    # 3. For each match: persist the job, draft a letter, optionally submit.
+    # 3. For each match: persist the job, draft a letter ONLY when one is
+    #    required, then optionally submit.
     for score, nj in ranked:
         job = _get_or_create_job(db, nj)
         app = _get_or_create_application(db, cv.id, job.id)
         app.relevance = score
 
-        try:
-            app.cover_letter = llm.generate_cover_letter(
-                cv.structured, job.title, job.company, job.description
-            )
-        except Exception as exc:
-            app.status = "draft"
-            db.add(app)
-            db.commit()
-            db.refresh(app)
-            items.append(_item(app, job, "error", f"Draft failed: {exc}"))
-            continue
+        requirement = _ensure_requirement(db, job)
+        drafted = False
+        detail: str | None = None
 
-        outcome, detail = _maybe_submit(db, payload, app, job, cv, applicant)
+        # Draft a cover letter only when the application is known to require
+        # one. Optional / not-required / unknown are left for on-demand
+        # drafting (the "Generate cover letter" button on the application).
+        if requirement == "required":
+            try:
+                app.cover_letter = llm.generate_cover_letter(
+                    cv.structured, job.title, job.company, job.description
+                )
+                drafted = True
+            except Exception as exc:
+                app.status = "draft"
+                db.add(app)
+                db.commit()
+                db.refresh(app)
+                items.append(
+                    _item(app, job, requirement, False, "error", f"Draft failed: {exc}")
+                )
+                continue
+        else:
+            detail = _no_draft_reason(requirement)
+
+        outcome, submit_detail = _maybe_submit(db, payload, app, job, cv, applicant)
         db.add(app)
         db.commit()
         db.refresh(app)
-        items.append(_item(app, job, outcome, detail))
+        items.append(
+            _item(app, job, requirement, drafted, outcome, submit_detail or detail)
+        )
 
     return AutoApplyResponse(
         query=query, found=len(found), considered=len(ranked), items=items
     )
 
 
+def _no_draft_reason(requirement: str) -> str:
+    return {
+        "not_required": "No cover letter needed for this application.",
+        "optional": "Cover letter is optional — draft on demand if you want one.",
+        "unknown": "Cover-letter requirement unknown — draft on demand if needed.",
+    }.get(requirement, "")
+
+
+def _ensure_requirement(db: Session, job: Job) -> str:
+    """Compute and cache whether this job requires a cover letter."""
+    if job.cover_letter_requirement:
+        return job.cover_letter_requirement
+    requirement = connectors.cover_letter_requirement(
+        job.source, job.board, job.external_id
+    )
+    job.cover_letter_requirement = requirement
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return requirement
+
+
 def _maybe_submit(db, payload, app, job, cv, applicant) -> tuple[str, str | None]:
     """Submit via official API when requested & supported; else queue."""
     if not payload.submit:
         app.status = "ready"
-        return "drafted", "Letter drafted; submission disabled (dry-run)."
+        return "dry_run", None
 
     if applicant is None:
         app.status = "ready"
-        return "queued_manual", "Save your applicant profile to enable submission."
+        return "queued", "Save your applicant profile to enable submission."
 
     applicant_dict = {
         "full_name": applicant.full_name,
@@ -136,11 +174,11 @@ def _maybe_submit(db, payload, app, job, cv, applicant) -> tuple[str, str | None
     try:
         result = connectors.submit(
             job.source,
-            job.company if job.source != "greenhouse" else _board_of(job),
+            job.board,
             job.external_id,
             applicant_dict,
             resume_text=cv.raw_text,
-            cover_letter=app.cover_letter,
+            cover_letter=app.cover_letter,  # None when no letter was drafted
             dry_run=False,
         )
         app.submitted_via = job.source
@@ -149,17 +187,11 @@ def _maybe_submit(db, payload, app, job, cv, applicant) -> tuple[str, str | None
         return "submitted", f"Submitted via {job.source}."
     except UnsupportedSubmission as exc:
         app.status = "ready"
-        return "queued_manual", str(exc)
+        return "queued", str(exc)
     except (httpx.HTTPError, ValueError) as exc:
         app.status = "ready"
         app.submit_result = {"error": str(exc)}
         return "error", f"Submission failed: {exc}"
-
-
-def _board_of(job: Job) -> str | None:
-    # Greenhouse board token isn't stored separately; for jobs imported via the
-    # greenhouse connector we kept the company name as the board token.
-    return job.company
 
 
 def _get_or_create_job(db: Session, nj: connectors.NormalizedJob) -> Job:
@@ -195,7 +227,14 @@ def _get_or_create_application(db: Session, cv_id: int, job_id: int) -> Applicat
     return existing or Application(cv_id=cv_id, job_id=job_id)
 
 
-def _item(app: Application, job: Job, outcome: str, detail: str | None) -> AutoApplyItem:
+def _item(
+    app: Application,
+    job: Job,
+    requirement: str,
+    drafted: bool,
+    outcome: str,
+    detail: str | None,
+) -> AutoApplyItem:
     return AutoApplyItem(
         application_id=app.id,
         job_title=job.title,
@@ -203,6 +242,8 @@ def _item(app: Application, job: Job, outcome: str, detail: str | None) -> AutoA
         relevance=app.relevance or 0.0,
         status=app.status,
         apply_url=job.apply_url or job.url,
+        cover_letter_requirement=requirement,
+        drafted=drafted,
         outcome=outcome,
         detail=detail,
     )

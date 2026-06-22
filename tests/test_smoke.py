@@ -92,6 +92,40 @@ def test_submit_greenhouse_dry_run_does_not_post():
     assert "first_name" in result["fields"]
 
 
+def test_cover_letter_requirement_unknown_for_search_sources():
+    from app import connectors
+
+    # Web-search results expose no application form -> we can't tell.
+    assert connectors.cover_letter_requirement("remotive", None, "42") == "unknown"
+    assert connectors.cover_letter_requirement("manual", None, None) == "unknown"
+
+
+def test_greenhouse_requirement_parsing(monkeypatch):
+    from app.connectors import greenhouse
+
+    def fake_get_json(url):
+        return {
+            "questions": [
+                {"label": "Resume", "required": True,
+                 "fields": [{"name": "resume", "type": "input_file"}]},
+                {"label": "Cover Letter", "required": True,
+                 "fields": [{"name": "cover_letter", "type": "input_file"}]},
+            ]
+        }
+
+    monkeypatch.setattr(greenhouse, "get_json", fake_get_json)
+    assert greenhouse.fetch_cover_letter_requirement("acme", "1") == "required"
+
+    def no_cover(url):
+        return {"questions": [
+            {"label": "Resume", "required": True,
+             "fields": [{"name": "resume", "type": "input_file"}]},
+        ]}
+
+    monkeypatch.setattr(greenhouse, "get_json", no_cover)
+    assert greenhouse.fetch_cover_letter_requirement("acme", "1") == "not_required"
+
+
 def test_cv_and_job_round_trip_in_db():
     """Create rows through the ORM without touching the model layer."""
     from app.database import SessionLocal, init_db
