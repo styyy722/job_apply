@@ -18,15 +18,6 @@ from ..schemas import (
 router = APIRouter(prefix="/api/applications", tags=["applications"])
 
 
-def _ensure_job_analyzed(db: Session, job: Job) -> dict:
-    if job.analysis is None:
-        job.analysis = llm.analyze_job(job.description)
-        db.add(job)
-        db.commit()
-        db.refresh(job)
-    return job.analysis
-
-
 def _ensure_cv_structured(db: Session, cv: CV) -> dict:
     if cv.structured is None:
         cv.structured = llm.structure_cv(cv.raw_text)
@@ -59,11 +50,8 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
 
     try:
         cv_struct = _ensure_cv_structured(db, cv)
-        analysis = _ensure_job_analyzed(db, job)
         app.cover_letter = llm.generate_cover_letter(
-            cv_struct,
-            {"title": job.title, "company": job.company},
-            analysis,
+            cv_struct, job.title, job.company, job.description
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Drafting failed: {exc}")
@@ -90,11 +78,11 @@ def generate_cover_letter(
     job = db.get(Job, app.job_id)
     try:
         cv_struct = _ensure_cv_structured(db, cv)
-        analysis = _ensure_job_analyzed(db, job)
         letter = llm.generate_cover_letter(
             cv_struct,
-            {"title": job.title, "company": job.company},
-            analysis,
+            job.title,
+            job.company,
+            job.description,
             extra_instructions=instructions,
         )
     except Exception as exc:

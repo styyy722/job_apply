@@ -158,6 +158,109 @@ $("#jobPasteBtn").addEventListener("click", async (e) => {
   }
 });
 
+// ---- Applicant profile + auto-apply -----------------------------------
+
+async function loadApplicant() {
+  try {
+    const a = await api("/api/applicant");
+    if (a) {
+      $("#apName").value = a.full_name || "";
+      $("#apEmail").value = a.email || "";
+      $("#apPhone").value = a.phone || "";
+    }
+  } catch (_) {}
+}
+
+$("#apSave").addEventListener("click", async (e) => {
+  const full_name = $("#apName").value.trim();
+  const email = $("#apEmail").value.trim();
+  if (!full_name || !email) return alert("Name and email are required.");
+  busy(e.target, true);
+  try {
+    await api("/api/applicant", {
+      method: "PUT",
+      body: JSON.stringify({
+        full_name,
+        email,
+        phone: $("#apPhone").value.trim() || null,
+      }),
+    });
+    $("#aaStatus").textContent = "Profile saved.";
+  } catch (err) {
+    alert("Save failed: " + err.message);
+  } finally {
+    busy(e.target, false);
+  }
+});
+
+$("#aaRun").addEventListener("click", async (e) => {
+  if (!state.activeCv) return alert("Upload or select a CV first.");
+  const submit = $("#aaSubmit").checked;
+  if (
+    submit &&
+    !confirm(
+      "This will SUBMIT applications through official board APIs on your " +
+        "behalf. Submissions are real and cannot be undone. Continue?"
+    )
+  )
+    return;
+  busy(e.target, true);
+  $("#aaStatus").textContent = "Searching, ranking, and drafting…";
+  $("#aaResults").innerHTML = "";
+  try {
+    const res = await api("/api/auto-apply", {
+      method: "POST",
+      body: JSON.stringify({
+        cv_id: state.activeCv,
+        keywords: $("#aaKeywords").value.trim() || null,
+        location: $("#aaLocation").value.trim() || null,
+        top_n: Number($("#aaTopN").value) || 5,
+        submit,
+      }),
+    });
+    renderAutoApply(res);
+    await loadJobs();
+    await loadApps();
+  } catch (err) {
+    $("#aaStatus").textContent = "Error: " + err.message;
+  } finally {
+    busy(e.target, false);
+  }
+});
+
+function renderAutoApply(res) {
+  $("#aaStatus").textContent = `Query "${res.query}" — found ${res.found}, drafted ${res.considered}.`;
+  const list = $("#aaResults");
+  list.innerHTML = "";
+  for (const it of res.items) {
+    const li = document.createElement("li");
+    const left = document.createElement("div");
+    left.innerHTML = `<strong>${esc(it.job_title)}</strong>
+      <div class="meta">${esc(it.company || "")} · relevance ${(
+        it.relevance * 100
+      ).toFixed(0)}% · <em>${esc(it.outcome)}</em>${
+      it.detail ? " — " + esc(it.detail) : ""
+    }</div>`;
+    const right = document.createElement("div");
+    const btn = document.createElement("button");
+    btn.className = "secondary";
+    btn.textContent = "Open letter";
+    btn.addEventListener("click", () => openDrawer(it.application_id));
+    right.appendChild(btn);
+    if (it.apply_url) {
+      const a = document.createElement("a");
+      a.href = it.apply_url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = "Apply page ↗";
+      a.style.marginLeft = "0.5rem";
+      right.appendChild(a);
+    }
+    li.append(left, right);
+    list.appendChild(li);
+  }
+}
+
 // ---- Applications -----------------------------------------------------
 
 async function createApplication(jobId, btn) {
@@ -302,6 +405,7 @@ function esc(s) {
 
 (async function init() {
   await loadHealth();
+  await loadApplicant();
   await loadCvs();
   await loadJobs();
   await loadApps();

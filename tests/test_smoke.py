@@ -55,6 +55,43 @@ def test_health_endpoint():
     assert body["model"]
 
 
+def test_matching_relevance_and_query():
+    from app import matching
+
+    cv = {"skills": ["Python", "FastAPI", "SQL"], "headline": "Backend engineer"}
+    assert matching.relevance(cv, "We need a Python and SQL engineer") > 0
+    assert matching.relevance(cv, "Marketing manager for cosmetics") == 0.0
+    q = matching.derive_query(cv)
+    assert "Python" in q
+
+
+def test_submit_unsupported_source_raises():
+    import pytest
+
+    from app.connectors import UnsupportedSubmission, submit
+
+    with pytest.raises(UnsupportedSubmission):
+        submit("remotive", None, "1", {"full_name": "A B", "email": "a@b.c"},
+               resume_text="cv", cover_letter="cl", dry_run=False)
+
+
+def test_submit_greenhouse_dry_run_does_not_post():
+    from app.connectors import submit
+
+    result = submit(
+        "greenhouse",
+        "stripe",
+        "123",
+        {"full_name": "Ada Lovelace", "email": "ada@example.com"},
+        resume_text="Engineer",
+        cover_letter="Dear team",
+        dry_run=True,
+    )
+    assert result["dry_run"] is True
+    assert result["submitted"] is False
+    assert "first_name" in result["fields"]
+
+
 def test_cv_and_job_round_trip_in_db():
     """Create rows through the ORM without touching the model layer."""
     from app.database import SessionLocal, init_db

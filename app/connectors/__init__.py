@@ -9,8 +9,18 @@ from __future__ import annotations
 from .base import NormalizedJob
 from .greenhouse import fetch_greenhouse
 from .lever import fetch_lever
+from .search import search_jobs
+from .submit import UnsupportedSubmission, submit
 
-__all__ = ["NormalizedJob", "fetch_greenhouse", "fetch_lever", "fetch"]
+__all__ = [
+    "NormalizedJob",
+    "fetch_greenhouse",
+    "fetch_lever",
+    "fetch",
+    "search_jobs",
+    "submit",
+    "UnsupportedSubmission",
+]
 
 
 def fetch(source: str, board: str, query: str | None, limit: int) -> list[NormalizedJob]:

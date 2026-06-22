@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     JSON,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -61,6 +62,22 @@ class Job(Base):
     )
 
 
+class Applicant(Base):
+    """The candidate's contact details, used when submitting via an API.
+
+    Single-row table (id is always 1); the UI saves it once.
+    """
+
+    __tablename__ = "applicant"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    full_name: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    links: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class Application(Base):
     __tablename__ = "applications"
     __table_args__ = (
@@ -74,6 +91,10 @@ class Application(Base):
     # draft -> ready -> submitted -> interviewing -> offer / rejected
     status: Mapped[str] = mapped_column(String(32), default="draft")
     cover_letter: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # How the application was/will be sent and the result of any submission.
+    submitted_via: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    submit_result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    relevance: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
