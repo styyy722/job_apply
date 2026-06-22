@@ -63,18 +63,50 @@
         <ul id="jobList" class="job-list"></ul>
       </section>
 
-      <!-- Step 3: Applications -->
+      <!-- Step 3: Auto-apply -->
       <section class="card">
-        <h2>3 · Applications</h2>
+        <h2>3 · Auto-apply</h2>
         <p class="hint">
-          Pick a CV and a job above, then "Score &amp; draft" to create an
-          application.
+          Search the web for roles matching your CV, draft tailored letters for
+          the best matches, and (optionally) submit through official board APIs.
+        </p>
+        <details>
+          <summary>Applicant profile (needed only to actually submit)</summary>
+          <div class="row">
+            <input id="apName" placeholder="Full name" />
+            <input id="apEmail" placeholder="Email" />
+            <input id="apPhone" placeholder="Phone (optional)" />
+            <button id="apSave" class="secondary">Save profile</button>
+          </div>
+        </details>
+        <div class="row">
+          <input id="aaKeywords" placeholder="keywords (blank = derive from CV)" />
+          <input id="aaLocation" placeholder="location (optional)" />
+          <label
+            >drafts
+            <input id="aaTopN" type="number" value="5" min="1" max="25" />
+          </label>
+          <label class="checkbox"
+            >Actually submit (official APIs only)
+            <input id="aaSubmit" type="checkbox" />
+          </label>
+          <button id="aaRun">Run auto-apply</button>
+        </div>
+        <div id="aaStatus" class="status"></div>
+        <ul id="aaResults" class="job-list"></ul>
+      </section>
+
+      <!-- Step 4: Applications -->
+      <section class="card">
+        <h2>4 · Applications</h2>
+        <p class="hint">
+          Pick a CV and a job above, then "Draft cover letter" to create an
+          application with a tailored letter.
         </p>
         <table id="appTable">
           <thead>
             <tr>
               <th>Job</th>
-              <th>Score</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>

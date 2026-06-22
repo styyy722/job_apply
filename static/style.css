@@ -81,6 +81,16 @@ label {
   gap: 0.2rem;
 }
 
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+label.checkbox input {
+  width: auto;
+}
+
 input,
 select,
 textarea,

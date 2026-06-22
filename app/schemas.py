@@ -64,6 +64,7 @@ class JobOut(BaseModel):
     url: str | None
     apply_url: str | None
     description: str
+    cover_letter_requirement: str | None
     analysis: dict[str, Any] | None
     created_at: datetime
 
@@ -102,9 +103,61 @@ class ApplicationOut(BaseModel):
     cv_id: int
     job_id: int
     status: str
-    match_score: float | None
-    match: dict[str, Any] | None
     cover_letter: str | None
     notes: str | None
+    submitted_via: str | None
+    submit_result: dict[str, Any] | None
+    relevance: float | None
     created_at: datetime
     updated_at: datetime
+
+
+# ---- Applicant profile -------------------------------------------------
+
+
+class ApplicantIn(BaseModel):
+    full_name: str = Field(min_length=1, max_length=255)
+    email: str = Field(min_length=3, max_length=255)
+    phone: str | None = None
+    location: str | None = None
+    links: str | None = None
+
+
+class ApplicantOut(ApplicantIn):
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---- Auto-apply --------------------------------------------------------
+
+
+class AutoApplyRequest(BaseModel):
+    cv_id: int
+    # If omitted, a query is derived from the CV's strongest skills.
+    keywords: str | None = None
+    location: str | None = None
+    search_limit: int = Field(default=25, ge=1, le=100)
+    top_n: int = Field(default=5, ge=1, le=25, description="How many to draft")
+    min_relevance: float = Field(default=0.05, ge=0.0, le=1.0)
+    # Actually submit via official APIs. Off by default (safe dry-run).
+    submit: bool = False
+
+
+class AutoApplyItem(BaseModel):
+    application_id: int
+    job_title: str
+    company: str | None
+    relevance: float
+    status: str
+    apply_url: str | None
+    # required | optional | not_required | unknown
+    cover_letter_requirement: str
+    drafted: bool
+    outcome: str  # drafted | submitted | dry_run | queued | error
+    detail: str | None = None
+
+
+class AutoApplyResponse(BaseModel):
+    query: str
+    found: int
+    considered: int
+    items: list[AutoApplyItem]

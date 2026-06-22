@@ -8,9 +8,32 @@ Public endpoint (no auth):
 
 from __future__ import annotations
 
+import httpx
+
 from .base import NormalizedJob, get_json, strip_html
 
 BASE = "https://boards-api.greenhouse.io/v1/boards"
+
+
+def fetch_cover_letter_requirement(board: str, job_id: str) -> str:
+    """Inspect a Greenhouse job's application form for a cover-letter field.
+
+    Returns "required" | "optional" | "not_required". The questions endpoint
+    lists every form field; a cover letter shows up as a field named
+    "cover_letter" (or a question labelled "Cover Letter").
+    """
+    try:
+        data = get_json(f"{BASE}/{board}/jobs/{job_id}?questions=true")
+    except httpx.HTTPError:
+        return "unknown"
+
+    questions = data.get("questions", []) if isinstance(data, dict) else []
+    for q in questions:
+        label = (q.get("label") or "").lower()
+        names = [(f.get("name") or "").lower() for f in q.get("fields", [])]
+        if "cover_letter" in names or "cover letter" in label:
+            return "required" if q.get("required") else "optional"
+    return "not_required"
 
 
 def fetch_greenhouse(board: str, limit: int = 25) -> list[NormalizedJob]:

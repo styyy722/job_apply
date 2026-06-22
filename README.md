@@ -5,27 +5,29 @@ your CV, and drafts tailored cover letters. It imports jobs from **official,
 public job-board APIs** (Greenhouse, Lever), scores your fit with Claude, and
 keeps a simple application tracker.
 
-> **Design note — why "assistant", not "auto-bot".** Most job boards prohibit
-> automated scraping and automated submission in their Terms of Service, and
-> application forms differ per ATS (Workday, Greenhouse, Lever, Taleo…). This
-> app deliberately stops at **drafting**: it prepares everything, and you
-> review and submit. It imports postings only from documented public APIs and
-> does not scrape HTML or bypass access controls. Where a board exposes an
-> official application-submission API, a connector can be extended to support
-> semi-automatic submission — see `app/connectors/`.
+> **What "apply automatically" can and cannot mean.** The app can **search the
+> web for matching jobs, rank them against your CV, and draft tailored letters**
+> fully automatically. **Submission** is the constrained part: it is only done
+> through **official board APIs** (Greenhouse today) — those are ToS-compliant.
+> Arbitrary employer sites (Workday, custom forms) cannot be auto-submitted
+> safely or reliably (ToS bans bots, CAPTCHAs, per-job custom questions), so
+> those are **queued ready-to-apply** with the letter prepared and a one-click
+> link. Real submission is **off by default** and requires explicit opt-in plus
+> your applicant details — submitting to a real employer is irreversible.
 
 ## Features
 
-- **CV ingestion** — upload PDF / DOCX / TXT, or paste text. Claude extracts a
-  structured profile (skills, experience, education).
-- **Job import** — pull live postings from a Greenhouse or Lever board by its
+- **CV ingestion (once)** — upload PDF / DOCX / TXT, or paste text. Claude
+  extracts a structured profile (skills, experience, education) a single time
+  and caches it; every application reuses that same CV with no re-analysis.
+- **Online job search** — search across companies via a public job API and
+  **rank results against your CV** (free, no model call).
+- **Auto-apply pipeline** — search → rank → draft a tailored letter for the top
+  matches → optionally submit via an official API, all in one run.
+- **Job import** — also pull postings from a Greenhouse or Lever board by its
   public token, or paste a single job description.
-- **JD analysis** — Claude extracts requirements, keywords, seniority, and a
-  suggested cover-letter tone.
-- **Match scoring** — an honest 0–100 fit score with strengths, gaps, and
-  missing keywords.
-- **Cover-letter drafting** — a tailored letter grounded in your real CV, with
-  optional extra instructions.
+- **Cover-letter drafting** — a tailored letter grounded in your real CV, in a
+  single model call, with optional extra instructions and regenerate/copy.
 - **Tracker** — SQLite-backed list of applications with editable status.
 
 ## Architecture
@@ -38,9 +40,10 @@ app/
   models.py          CV, Job, Application tables
   schemas.py         Pydantic request/response models
   cv_parser.py       PDF/DOCX/TXT -> text
-  llm.py             Claude calls (structure CV, analyze JD, score, cover letter)
-  connectors/        official board APIs (greenhouse, lever)
-  routers/           /api/cv, /api/jobs, /api/applications
+  matching.py        free CV<->job relevance ranking (no model call)
+  llm.py             Claude calls (structure CV, draft cover letter)
+  connectors/        search (remotive), import (greenhouse/lever), submit (greenhouse)
+  routers/           /api/cv, /api/jobs, /api/applications, /api/auto-apply
 static/              minimal HTML/JS/CSS front end
 ```
 
@@ -72,13 +75,49 @@ Open http://localhost:8000.
 
 ## Typical flow
 
-1. **Upload your CV** (step 1) — it's parsed and analyzed.
-2. **Import jobs** (step 2) — e.g. source `greenhouse`, board `stripe`; or
-   paste a single description.
-3. **Score & draft** a job against your active CV — creates an application with
-   a fit score.
-4. **Open** the application to read the match breakdown and **generate a cover
-   letter**, then track status as you apply.
+1. **Upload your CV** (step 1) — parsed and analyzed once, then reused.
+2. **Auto-apply** (step 3) — optionally save your applicant profile, then "Run
+   auto-apply": it searches online, ranks by your CV, drafts letters for the
+   top matches, and (if you tick "Actually submit") submits via official APIs.
+   Leave submit off to review everything first.
+3. Or work manually: **import/paste a job** (step 2), then **draft a cover
+   letter** for it against your active CV.
+4. **Open** any application to read, tweak (extra instructions), regenerate, or
+   copy the letter, then track status (step 4) as you apply.
+
+## Cover letters are drafted only when required
+
+The app does **not** write a letter for every job. During auto-apply it checks
+whether the application requires a cover letter and only drafts one when it's
+**known to be required**:
+
+| Detected requirement | Behavior |
+| -------------------- | -------- |
+| `required`           | Draft the tailored letter automatically. |
+| `optional`           | Skip — draft on demand (the "Generate cover letter" button). |
+| `not_required`       | Skip — no letter needed. |
+| `unknown`            | Skip — draft on demand if a site turns out to need one. |
+
+Detection uses the official application form where available: Greenhouse's
+questions endpoint (`/jobs/{id}?questions=true`) reports whether a `cover_letter`
+field exists and is required. General web-search results (Remotive) expose no
+form schema, so they come back `unknown` and are left for on-demand drafting —
+keeping cost to zero unless you actually need a letter.
+
+## How auto-submission works (and its limits)
+
+`POST /api/auto-apply` runs: search (free) → CV ranking (free) → cover-letter
+**requirement check** → draft only when required (model call) → submission.
+
+- **Submission is opt-in** (`submit: true`) and goes only through official board
+  APIs. `app/connectors/submit.py` implements Greenhouse's documented Job Board
+  application endpoint.
+- Jobs with **custom required questions** are rejected by the board (surfaced as
+  an error), not half-submitted.
+- Sources without an official API are **queued** (`outcome: queued_manual`) with
+  the letter ready and an apply link — you finish those by hand.
+- There is **no headless-browser auto-filling of arbitrary sites** by design:
+  it violates most ToS, breaks on CAPTCHAs/logins, and risks account bans.
 
 ## API
 

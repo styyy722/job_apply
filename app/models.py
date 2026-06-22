@@ -53,6 +53,14 @@ class Job(Base):
     url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     apply_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     description: Mapped[str] = mapped_column(Text)
+    # Board/company token this job was imported with (needed to query the
+    # application form on official APIs).
+    board: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Whether a cover letter is required to apply, when we can determine it:
+    # "required" | "optional" | "not_required" | "unknown".
+    cover_letter_requirement: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
     # Model's analysis of the JD (requirements, keywords, tone, ...).
     analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
@@ -60,6 +68,22 @@ class Job(Base):
     applications: Mapped[list["Application"]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
     )
+
+
+class Applicant(Base):
+    """The candidate's contact details, used when submitting via an API.
+
+    Single-row table (id is always 1); the UI saves it once.
+    """
+
+    __tablename__ = "applicant"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    full_name: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    links: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Application(Base):
@@ -74,9 +98,11 @@ class Application(Base):
 
     # draft -> ready -> submitted -> interviewing -> offer / rejected
     status: Mapped[str] = mapped_column(String(32), default="draft")
-    match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    match: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     cover_letter: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # How the application was/will be sent and the result of any submission.
+    submitted_via: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    submit_result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    relevance: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

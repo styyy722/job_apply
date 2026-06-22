@@ -82,29 +82,6 @@ _JOB_SCHEMA: dict[str, Any] = {
     ],
 }
 
-_MATCH_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "additionalProperties": False,
-    "properties": {
-        "score": {
-            "type": "integer",
-            "description": "Overall fit, 0-100",
-        },
-        "verdict": {"type": "string"},
-        "strengths": {"type": "array", "items": {"type": "string"}},
-        "gaps": {"type": "array", "items": {"type": "string"}},
-        "missing_keywords": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": [
-        "score",
-        "verdict",
-        "strengths",
-        "gaps",
-        "missing_keywords",
-    ],
-}
-
-
 @lru_cache
 def _client() -> anthropic.Anthropic:
     settings = get_settings()
@@ -151,26 +128,19 @@ def analyze_job(description: str) -> dict:
     return _structured(prompt, _JOB_SCHEMA)
 
 
-def score_match(cv: dict, job_analysis: dict) -> dict:
-    prompt = (
-        "Score how well this candidate matches this job. Be honest and "
-        "specific. 'score' is an overall fit from 0-100. List concrete "
-        "strengths, gaps, and any important job keywords missing from the CV.\n\n"
-        f"CANDIDATE (structured CV):\n{json.dumps(cv, indent=2)}\n\n"
-        f"JOB ANALYSIS:\n{json.dumps(job_analysis, indent=2)}"
-    )
-    return _structured(prompt, _MATCH_SCHEMA, max_tokens=2048)
-
-
 def generate_cover_letter(
     cv: dict,
-    job: dict,
-    job_analysis: dict,
+    title: str,
+    company: str | None,
+    description: str,
     extra_instructions: str | None = None,
 ) -> str:
-    """Generate a tailored cover letter (plain text)."""
+    """Generate a tailored cover letter (plain text) in a single model call.
+
+    The model reads the job description directly, so no separate analysis call
+    is needed — one request per letter keeps cost low for bulk drafting.
+    """
     settings = get_settings()
-    tone = job_analysis.get("tone", "professional and warm")
     guidance = (
         f"\n\nADDITIONAL INSTRUCTIONS FROM THE CANDIDATE:\n{extra_instructions}"
         if extra_instructions
@@ -180,15 +150,15 @@ def generate_cover_letter(
         "Write a tailored cover letter for this candidate and role.\n"
         "Requirements:\n"
         "- Ground every claim in the candidate's actual CV; do not fabricate.\n"
-        "- Address the role's must-have requirements and weave in its keywords "
+        "- Address the role's key requirements and weave in its keywords "
         "naturally.\n"
-        f"- Tone: {tone}.\n"
+        "- Tone: professional and warm, matched to the role.\n"
         "- 3-4 short paragraphs, no more than ~350 words.\n"
         "- Return only the letter body. Use '[Your Name]' / '[Hiring Manager]' "
         "placeholders where appropriate; do not invent addresses or dates.\n\n"
         f"CANDIDATE (structured CV):\n{json.dumps(cv, indent=2)}\n\n"
-        f"ROLE: {job.get('title')} at {job.get('company') or 'the company'}\n\n"
-        f"JOB ANALYSIS:\n{json.dumps(job_analysis, indent=2)}"
+        f"ROLE: {title} at {company or 'the company'}\n\n"
+        f"JOB DESCRIPTION:\n{description}"
         f"{guidance}"
     )
     resp = _client().messages.create(

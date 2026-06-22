@@ -106,7 +106,7 @@ async function loadJobs() {
     )}${job.location ? " · " + esc(job.location) : ""}</div>`;
     const right = document.createElement("div");
     const btn = document.createElement("button");
-    btn.textContent = "Score & draft";
+    btn.textContent = "Draft cover letter";
     btn.className = "secondary";
     btn.addEventListener("click", () => createApplication(job.id, btn));
     right.appendChild(btn);
@@ -158,29 +158,137 @@ $("#jobPasteBtn").addEventListener("click", async (e) => {
   }
 });
 
+// ---- Applicant profile + auto-apply -----------------------------------
+
+async function loadApplicant() {
+  try {
+    const a = await api("/api/applicant");
+    if (a) {
+      $("#apName").value = a.full_name || "";
+      $("#apEmail").value = a.email || "";
+      $("#apPhone").value = a.phone || "";
+    }
+  } catch (_) {}
+}
+
+$("#apSave").addEventListener("click", async (e) => {
+  const full_name = $("#apName").value.trim();
+  const email = $("#apEmail").value.trim();
+  if (!full_name || !email) return alert("Name and email are required.");
+  busy(e.target, true);
+  try {
+    await api("/api/applicant", {
+      method: "PUT",
+      body: JSON.stringify({
+        full_name,
+        email,
+        phone: $("#apPhone").value.trim() || null,
+      }),
+    });
+    $("#aaStatus").textContent = "Profile saved.";
+  } catch (err) {
+    alert("Save failed: " + err.message);
+  } finally {
+    busy(e.target, false);
+  }
+});
+
+$("#aaRun").addEventListener("click", async (e) => {
+  if (!state.activeCv) return alert("Upload or select a CV first.");
+  const submit = $("#aaSubmit").checked;
+  if (
+    submit &&
+    !confirm(
+      "This will SUBMIT applications through official board APIs on your " +
+        "behalf. Submissions are real and cannot be undone. Continue?"
+    )
+  )
+    return;
+  busy(e.target, true);
+  $("#aaStatus").textContent = "Searching, ranking, and drafting…";
+  $("#aaResults").innerHTML = "";
+  try {
+    const res = await api("/api/auto-apply", {
+      method: "POST",
+      body: JSON.stringify({
+        cv_id: state.activeCv,
+        keywords: $("#aaKeywords").value.trim() || null,
+        location: $("#aaLocation").value.trim() || null,
+        top_n: Number($("#aaTopN").value) || 5,
+        submit,
+      }),
+    });
+    renderAutoApply(res);
+    await loadJobs();
+    await loadApps();
+  } catch (err) {
+    $("#aaStatus").textContent = "Error: " + err.message;
+  } finally {
+    busy(e.target, false);
+  }
+});
+
+function renderAutoApply(res) {
+  $("#aaStatus").textContent = `Query "${res.query}" — found ${res.found}, drafted ${res.considered}.`;
+  const list = $("#aaResults");
+  list.innerHTML = "";
+  const reqLabel = {
+    required: "cover letter required",
+    optional: "cover letter optional",
+    not_required: "no cover letter needed",
+    unknown: "requirement unknown",
+  };
+  for (const it of res.items) {
+    const li = document.createElement("li");
+    const left = document.createElement("div");
+    const letter = it.drafted ? "letter drafted ✓" : "no letter drafted";
+    left.innerHTML = `<strong>${esc(it.job_title)}</strong>
+      <div class="meta">${esc(it.company || "")} · relevance ${(
+        it.relevance * 100
+      ).toFixed(0)}% · ${esc(reqLabel[it.cover_letter_requirement] || "")} ·
+      ${esc(letter)} · <em>${esc(it.outcome)}</em>${
+      it.detail ? " — " + esc(it.detail) : ""
+    }</div>`;
+    const right = document.createElement("div");
+    const btn = document.createElement("button");
+    btn.className = "secondary";
+    btn.textContent = it.drafted ? "Open letter" : "Draft / open";
+    btn.addEventListener("click", () => openDrawer(it.application_id));
+    right.appendChild(btn);
+    if (it.apply_url) {
+      const a = document.createElement("a");
+      a.href = it.apply_url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = "Apply page ↗";
+      a.style.marginLeft = "0.5rem";
+      right.appendChild(a);
+    }
+    li.append(left, right);
+    list.appendChild(li);
+  }
+}
+
 // ---- Applications -----------------------------------------------------
 
 async function createApplication(jobId, btn) {
   if (!state.activeCv) return alert("Upload or select a CV first.");
   busy(btn, true);
+  const original = btn.textContent;
+  btn.textContent = "Drafting…";
   try {
-    await api("/api/applications", {
+    const app = await api("/api/applications", {
       method: "POST",
       body: JSON.stringify({ cv_id: state.activeCv, job_id: jobId }),
     });
     await loadApps();
+    openDrawer(app.id); // show the freshly drafted letter
   } catch (err) {
-    alert("Scoring failed: " + err.message);
+    alert("Drafting failed: " + err.message);
   } finally {
+    btn.textContent = original;
     busy(btn, false);
   }
-}
-
-function scoreClass(s) {
-  if (s == null) return "";
-  if (s >= 70) return "score-high";
-  if (s >= 45) return "score-mid";
-  return "score-low";
 }
 
 async function loadApps() {
@@ -196,12 +304,6 @@ async function loadApps() {
     tdJob.innerHTML = `<strong>${esc(job.title)}</strong><div class="meta">${esc(
       job.company || ""
     )}</div>`;
-
-    const tdScore = document.createElement("td");
-    tdScore.innerHTML =
-      app.match_score == null
-        ? "—"
-        : `<span class="${scoreClass(app.match_score)}">${app.match_score}</span>`;
 
     const tdStatus = document.createElement("td");
     const sel = document.createElement("select");
@@ -228,7 +330,7 @@ async function loadApps() {
     viewBtn.addEventListener("click", () => openDrawer(app.id));
     tdActions.appendChild(viewBtn);
 
-    tr.append(tdJob, tdScore, tdStatus, tdActions);
+    tr.append(tdJob, tdStatus, tdActions);
     tbody.appendChild(tr);
   }
 }
@@ -248,27 +350,24 @@ async function openDrawer(appId) {
   const app = await api(`/api/applications/${appId}`);
   const drawer = $("#drawer");
   const body = $("#drawerBody");
-  const m = app.match || {};
-  const tags = (arr) =>
-    (arr || []).map((x) => `<span class="tag">${esc(x)}</span>`).join("");
 
   body.innerHTML = `
     <h2>Application #${app.id}</h2>
-    <p><strong>Fit score:</strong>
-      <span class="${scoreClass(app.match_score)}">${app.match_score ?? "—"}</span>
-      — ${esc(m.verdict || "")}</p>
-    <h3>Strengths</h3><div>${tags(m.strengths)}</div>
-    <h3>Gaps</h3><div>${tags(m.gaps)}</div>
-    <h3>Missing keywords</h3><div>${tags(m.missing_keywords)}</div>
     <h3>Cover letter</h3>
+    <textarea id="letterInstr" rows="2"
+      placeholder="Optional: extra instructions (tone, emphasis, length)…"></textarea>
     <button id="genLetter">${
       app.cover_letter ? "Regenerate" : "Generate"
     } cover letter</button>
-    <textarea id="letterInstr" rows="2"
-      placeholder="Optional: extra instructions (tone, emphasis, length)…"></textarea>
+    <button id="copyLetter" class="secondary">Copy</button>
     <pre id="letterOut">${esc(app.cover_letter || "(not generated yet)")}</pre>
   `;
   drawer.classList.remove("hidden");
+
+  $("#copyLetter").addEventListener("click", () => {
+    const text = $("#letterOut").textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(text);
+  });
 
   $("#genLetter").addEventListener("click", async (e) => {
     busy(e.target, true);
@@ -314,6 +413,7 @@ function esc(s) {
 
 (async function init() {
   await loadHealth();
+  await loadApplicant();
   await loadCvs();
   await loadJobs();
   await loadApps();

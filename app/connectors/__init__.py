@@ -7,10 +7,34 @@ and do not scrape HTML or bypass any access controls.
 from __future__ import annotations
 
 from .base import NormalizedJob
-from .greenhouse import fetch_greenhouse
+from .greenhouse import fetch_cover_letter_requirement, fetch_greenhouse
 from .lever import fetch_lever
+from .search import search_jobs
+from .submit import UnsupportedSubmission, submit
 
-__all__ = ["NormalizedJob", "fetch_greenhouse", "fetch_lever", "fetch"]
+__all__ = [
+    "NormalizedJob",
+    "fetch_greenhouse",
+    "fetch_lever",
+    "fetch",
+    "search_jobs",
+    "submit",
+    "UnsupportedSubmission",
+    "cover_letter_requirement",
+]
+
+
+def cover_letter_requirement(
+    source: str, board: str | None, external_id: str | None
+) -> str:
+    """Best-effort: does applying to this job require a cover letter?
+
+    Only official APIs expose the application form. For everything else
+    (general web search results) we genuinely cannot tell -> "unknown".
+    """
+    if source == "greenhouse" and board and external_id:
+        return fetch_cover_letter_requirement(board, external_id)
+    return "unknown"
 
 
 def fetch(source: str, board: str, query: str | None, limit: int) -> list[NormalizedJob]:

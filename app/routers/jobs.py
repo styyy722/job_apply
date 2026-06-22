@@ -56,6 +56,7 @@ def import_jobs(payload: JobImportRequest, db: Session = Depends(get_db)):
             url=nj.url,
             apply_url=nj.apply_url,
             description=nj.description,
+            board=payload.board,
         )
         db.add(job)
         saved.append(job)

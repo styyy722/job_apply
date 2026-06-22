@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .database import init_db
-from .routers import applications, cv, jobs
+from .routers import applications, auto_apply, cv, jobs
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -49,6 +49,7 @@ def health() -> dict:
 app.include_router(cv.router)
 app.include_router(jobs.router)
 app.include_router(applications.router)
+app.include_router(auto_apply.router)
 
 
 @app.get("/")
