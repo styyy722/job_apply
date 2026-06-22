@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Job Apply</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Job Apply</h1>
+      <p class="tagline">
+        Read a job description, match it against your CV, draft a cover letter.
+      </p>
+      <p id="health" class="health"></p>
+    </header>
+
+    <main>
+      <!-- Step 1: CV -->
+      <section class="card">
+        <h2>1 · Your CV</h2>
+        <div class="row">
+          <label
+            >Upload (PDF / DOCX / TXT)
+            <input type="file" id="cvFile" accept=".pdf,.docx,.txt,.md" />
+          </label>
+          <button id="cvUploadBtn">Upload &amp; analyze</button>
+        </div>
+        <details>
+          <summary>…or paste CV text</summary>
+          <input id="cvName" placeholder="Name for this CV" />
+          <textarea id="cvText" rows="6" placeholder="Paste your CV text"></textarea>
+          <button id="cvTextBtn">Save &amp; analyze</button>
+        </details>
+        <div class="row">
+          <label
+            >Active CV:
+            <select id="cvSelect"></select>
+          </label>
+        </div>
+        <div id="cvStatus" class="status"></div>
+      </section>
+
+      <!-- Step 2: Jobs -->
+      <section class="card">
+        <h2>2 · Jobs</h2>
+        <div class="row">
+          <select id="importSource">
+            <option value="greenhouse">Greenhouse</option>
+            <option value="lever">Lever</option>
+          </select>
+          <input id="importBoard" placeholder="board token (e.g. stripe)" />
+          <input id="importQuery" placeholder="title filter (optional)" />
+          <button id="importBtn">Import</button>
+        </div>
+        <details>
+          <summary>…or paste a single job description</summary>
+          <input id="jobTitle" placeholder="Job title" />
+          <input id="jobCompany" placeholder="Company" />
+          <textarea id="jobDesc" rows="6" placeholder="Paste the job description"></textarea>
+          <button id="jobPasteBtn">Save job</button>
+        </details>
+        <ul id="jobList" class="job-list"></ul>
+      </section>
+
+      <!-- Step 3: Applications -->
+      <section class="card">
+        <h2>3 · Applications</h2>
+        <p class="hint">
+          Pick a CV and a job above, then "Score &amp; draft" to create an
+          application.
+        </p>
+        <table id="appTable">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>Score</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+
+    <!-- Detail drawer -->
+    <aside id="drawer" class="drawer hidden">
+      <button id="drawerClose" class="drawer-close">×</button>
+      <div id="drawerBody"></div>
+    </aside>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
