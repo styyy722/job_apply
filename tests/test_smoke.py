@@ -67,7 +67,7 @@ def test_cv_and_job_round_trip_in_db():
         job = Job(source="manual", title="Backend Engineer", description="…")
         db.add_all([cv, job])
         db.commit()
-        app_row = Application(cv_id=cv.id, job_id=job.id, match_score=72.0)
+        app_row = Application(cv_id=cv.id, job_id=job.id)
         db.add(app_row)
         db.commit()
         assert app_row.id is not None

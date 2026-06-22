@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     JSON,
     DateTime,
-    Float,
     ForeignKey,
     Integer,
     String,
@@ -74,8 +73,6 @@ class Application(Base):
 
     # draft -> ready -> submitted -> interviewing -> offer / rejected
     status: Mapped[str] = mapped_column(String(32), default="draft")
-    match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    match: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     cover_letter: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

@@ -102,8 +102,6 @@ class ApplicationOut(BaseModel):
     cv_id: int
     job_id: int
     status: str
-    match_score: float | None
-    match: dict[str, Any] | None
     cover_letter: str | None
     notes: str | None
     created_at: datetime

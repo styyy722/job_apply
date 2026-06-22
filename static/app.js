@@ -106,7 +106,7 @@ async function loadJobs() {
     )}${job.location ? " · " + esc(job.location) : ""}</div>`;
     const right = document.createElement("div");
     const btn = document.createElement("button");
-    btn.textContent = "Score & draft";
+    btn.textContent = "Draft cover letter";
     btn.className = "secondary";
     btn.addEventListener("click", () => createApplication(job.id, btn));
     right.appendChild(btn);
@@ -163,24 +163,21 @@ $("#jobPasteBtn").addEventListener("click", async (e) => {
 async function createApplication(jobId, btn) {
   if (!state.activeCv) return alert("Upload or select a CV first.");
   busy(btn, true);
+  const original = btn.textContent;
+  btn.textContent = "Drafting…";
   try {
-    await api("/api/applications", {
+    const app = await api("/api/applications", {
       method: "POST",
       body: JSON.stringify({ cv_id: state.activeCv, job_id: jobId }),
     });
     await loadApps();
+    openDrawer(app.id); // show the freshly drafted letter
   } catch (err) {
-    alert("Scoring failed: " + err.message);
+    alert("Drafting failed: " + err.message);
   } finally {
+    btn.textContent = original;
     busy(btn, false);
   }
-}
-
-function scoreClass(s) {
-  if (s == null) return "";
-  if (s >= 70) return "score-high";
-  if (s >= 45) return "score-mid";
-  return "score-low";
 }
 
 async function loadApps() {
@@ -196,12 +193,6 @@ async function loadApps() {
     tdJob.innerHTML = `<strong>${esc(job.title)}</strong><div class="meta">${esc(
       job.company || ""
     )}</div>`;
-
-    const tdScore = document.createElement("td");
-    tdScore.innerHTML =
-      app.match_score == null
-        ? "—"
-        : `<span class="${scoreClass(app.match_score)}">${app.match_score}</span>`;
 
     const tdStatus = document.createElement("td");
     const sel = document.createElement("select");
@@ -228,7 +219,7 @@ async function loadApps() {
     viewBtn.addEventListener("click", () => openDrawer(app.id));
     tdActions.appendChild(viewBtn);
 
-    tr.append(tdJob, tdScore, tdStatus, tdActions);
+    tr.append(tdJob, tdStatus, tdActions);
     tbody.appendChild(tr);
   }
 }
@@ -248,27 +239,24 @@ async function openDrawer(appId) {
   const app = await api(`/api/applications/${appId}`);
   const drawer = $("#drawer");
   const body = $("#drawerBody");
-  const m = app.match || {};
-  const tags = (arr) =>
-    (arr || []).map((x) => `<span class="tag">${esc(x)}</span>`).join("");
 
   body.innerHTML = `
     <h2>Application #${app.id}</h2>
-    <p><strong>Fit score:</strong>
-      <span class="${scoreClass(app.match_score)}">${app.match_score ?? "—"}</span>
-      — ${esc(m.verdict || "")}</p>
-    <h3>Strengths</h3><div>${tags(m.strengths)}</div>
-    <h3>Gaps</h3><div>${tags(m.gaps)}</div>
-    <h3>Missing keywords</h3><div>${tags(m.missing_keywords)}</div>
     <h3>Cover letter</h3>
+    <textarea id="letterInstr" rows="2"
+      placeholder="Optional: extra instructions (tone, emphasis, length)…"></textarea>
     <button id="genLetter">${
       app.cover_letter ? "Regenerate" : "Generate"
     } cover letter</button>
-    <textarea id="letterInstr" rows="2"
-      placeholder="Optional: extra instructions (tone, emphasis, length)…"></textarea>
+    <button id="copyLetter" class="secondary">Copy</button>
     <pre id="letterOut">${esc(app.cover_letter || "(not generated yet)")}</pre>
   `;
   drawer.classList.remove("hidden");
+
+  $("#copyLetter").addEventListener("click", () => {
+    const text = $("#letterOut").textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(text);
+  });
 
   $("#genLetter").addEventListener("click", async (e) => {
     busy(e.target, true);

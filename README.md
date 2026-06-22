@@ -16,16 +16,15 @@ keeps a simple application tracker.
 
 ## Features
 
-- **CV ingestion** — upload PDF / DOCX / TXT, or paste text. Claude extracts a
-  structured profile (skills, experience, education).
+- **CV ingestion (once)** — upload PDF / DOCX / TXT, or paste text. Claude
+  extracts a structured profile (skills, experience, education) a single time
+  and caches it; every application reuses that same CV with no re-analysis.
 - **Job import** — pull live postings from a Greenhouse or Lever board by its
   public token, or paste a single job description.
-- **JD analysis** — Claude extracts requirements, keywords, seniority, and a
-  suggested cover-letter tone.
-- **Match scoring** — an honest 0–100 fit score with strengths, gaps, and
-  missing keywords.
-- **Cover-letter drafting** — a tailored letter grounded in your real CV, with
-  optional extra instructions.
+- **JD analysis** — Claude reads the job description (requirements, keywords,
+  tone) to inform the letter.
+- **Cover-letter drafting** — the app's job: a tailored letter grounded in your
+  real CV, with optional extra instructions and one-click regenerate/copy.
 - **Tracker** — SQLite-backed list of applications with editable status.
 
 ## Architecture
@@ -38,7 +37,7 @@ app/
   models.py          CV, Job, Application tables
   schemas.py         Pydantic request/response models
   cv_parser.py       PDF/DOCX/TXT -> text
-  llm.py             Claude calls (structure CV, analyze JD, score, cover letter)
+  llm.py             Claude calls (structure CV, analyze JD, draft cover letter)
   connectors/        official board APIs (greenhouse, lever)
   routers/           /api/cv, /api/jobs, /api/applications
 static/              minimal HTML/JS/CSS front end
@@ -75,10 +74,10 @@ Open http://localhost:8000.
 1. **Upload your CV** (step 1) — it's parsed and analyzed.
 2. **Import jobs** (step 2) — e.g. source `greenhouse`, board `stripe`; or
    paste a single description.
-3. **Score & draft** a job against your active CV — creates an application with
-   a fit score.
-4. **Open** the application to read the match breakdown and **generate a cover
-   letter**, then track status as you apply.
+3. **Draft cover letter** for a job against your active CV — creates an
+   application and drafts a tailored letter in one step.
+4. **Open** the application to read, tweak (extra instructions), regenerate, or
+   copy the letter, then track status as you apply.
 
 ## API
 
